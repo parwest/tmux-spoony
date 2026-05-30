@@ -1,5 +1,7 @@
 # tmux-spoony
 
+![tmux-spoony demo](./assets/tmux-spoony-vid.gif)
+
 Small tmux copy-mode helpers for grabbing useful terminal text without replacing tmux copy mode.
 
 Spoony adds one-key selectors for URLs, paths, shell commands, and whole lines. You still navigate with normal tmux copy-mode keys.
@@ -108,10 +110,10 @@ set -g @spoony-open-key 'off'
 The command selector uses this default prompt regex:
 
 ```tmux
-set -g @spoony-command-prompt-regex '^.*[$#>] +'
+set -g @spoony-command-prompt-regex '^.+[$#>] +'
 ```
 
-It matches common prompts ending in `$ `, `# `, or `> `. If your prompt is unusual, set a more specific regex before loading Spoony.
+It matches common prompts ending in `$ `, `# `, or `> `, and avoids mistaking lines like npm's `> start` output for a shell prompt. If your prompt is unusual, set a more specific regex before loading Spoony.
 
 ## Requirements
 

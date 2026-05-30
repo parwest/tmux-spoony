@@ -10,6 +10,7 @@ if [ -z "$kind" ] || [ -z "$pane_id" ]; then
 fi
 
 cursor_x="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_x}')"
+cursor_y="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_y}')"
 line="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_line}')"
 
 if [ -z "$line" ]; then
@@ -20,6 +21,19 @@ fi
 if ! [[ "$cursor_x" =~ ^[0-9]+$ ]]; then
   cursor_x=0
 fi
+
+if ! [[ "$cursor_y" =~ ^[0-9]+$ ]]; then
+  cursor_y=""
+fi
+
+visible_cursor_line() {
+  if [ -z "$cursor_y" ]; then
+    return
+  fi
+
+  tmux capture-pane -p -t "$pane_id" -S "$cursor_y" -E "$cursor_y" 2>/dev/null |
+    sed -n '1p'
+}
 
 trim_trailing_punctuation() {
   token="$1"
@@ -116,13 +130,23 @@ case "$kind" in
     ;;
   path)
     label="path"
+    visible_line="$(visible_cursor_line)"
+    if [ -n "$visible_line" ]; then
+      line="$visible_line"
+    fi
+
     find_nearest_match '(~|/|\./|\.\./|[[:alnum:]_.-]+/)[^[:space:]<>"'\'']+'
     ;;
   command)
     label="command"
     prompt_regex="$(tmux show-option -gqv @spoony-command-prompt-regex)"
     if [ -z "$prompt_regex" ]; then
-      prompt_regex='^.*[$#>] +'
+      prompt_regex='^.+[$#>] +'
+    fi
+
+    visible_line="$(visible_cursor_line)"
+    if [ -n "$visible_line" ] && [[ "$visible_line" =~ $prompt_regex ]]; then
+      line="$visible_line"
     fi
 
     if ! [[ "$line" =~ $prompt_regex ]]; then
