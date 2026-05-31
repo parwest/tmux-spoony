@@ -4,6 +4,8 @@ CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 url_key="$(tmux show-option -gqv @spoony-url-key)"
 path_key="$(tmux show-option -gqv @spoony-path-key)"
+url_cycle_key="$(tmux show-option -gqv @spoony-url-cycle-key)"
+path_cycle_key="$(tmux show-option -gqv @spoony-path-cycle-key)"
 command_key="$(tmux show-option -gqv @spoony-command-key)"
 line_key="$(tmux show-option -gqv @spoony-line-key)"
 open_key="$(tmux show-option -gqv @spoony-open-key)"
@@ -28,6 +30,23 @@ if [ -z "$open_key" ]; then
   open_key="o"
 fi
 
+derive_cycle_key() {
+  explicit_key="$1"
+  base_key="$2"
+  default_key="$3"
+
+  if [ -n "$explicit_key" ]; then
+    printf '%s' "$explicit_key"
+  elif [[ "$base_key" =~ ^[a-z]$ ]]; then
+    printf '%s' "$base_key" | tr '[:lower:]' '[:upper:]'
+  else
+    printf '%s' "$default_key"
+  fi
+}
+
+url_cycle_key="$(derive_cycle_key "$url_cycle_key" "$url_key" "U")"
+path_cycle_key="$(derive_cycle_key "$path_cycle_key" "$path_key" "P")"
+
 bind_copy_mode_key() {
   key="$1"
   shift
@@ -39,6 +58,8 @@ bind_copy_mode_key() {
 
 bind_copy_mode_key "$url_key" run-shell "bash '$CURRENT_DIR/scripts/select-on-line.sh' url '#{pane_id}'"
 bind_copy_mode_key "$path_key" run-shell "bash '$CURRENT_DIR/scripts/select-on-line.sh' path '#{pane_id}'"
+bind_copy_mode_key "$url_cycle_key" run-shell "bash '$CURRENT_DIR/scripts/select-on-line.sh' url '#{pane_id}' cycle"
+bind_copy_mode_key "$path_cycle_key" run-shell "bash '$CURRENT_DIR/scripts/select-on-line.sh' path '#{pane_id}' cycle"
 bind_copy_mode_key "$command_key" run-shell "bash '$CURRENT_DIR/scripts/select-on-line.sh' command '#{pane_id}'"
 bind_copy_mode_key "$line_key" send-keys -X select-line
 bind_copy_mode_key "$open_key" send-keys -X copy-pipe-and-cancel "bash '$CURRENT_DIR/scripts/open-selection.sh' '#{pane_id}'"

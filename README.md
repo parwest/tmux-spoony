@@ -18,7 +18,9 @@ Move to a target line with normal tmux copy-mode navigation, then press:
 
 ```text
 u  select URL on the cursor line
+U  cycle to the next URL on the cursor line
 p  select path on the cursor line
+P  cycle to the next path on the cursor line
 m  select command after the prompt
 x  select the whole line
 o  open the selected text
@@ -89,20 +91,36 @@ run-shell '/path/to/tmux-spoony/tmux-spoony.tmux'
 
 ## Key Bindings
 
-Spoony works without configuration. To override defaults, set options before loading the plugin:
+Spoony works without configuration. To customize the copy-mode keys, add options to your `~/.tmux.conf` before Spoony is loaded. If you use TPM, put them after `set -g @plugin 'parwest/tmux-spoony'` and before `run '~/.tmux/plugins/tpm/tpm'`. If you use a local checkout, put them before the Spoony `run-shell` line.
 
 ```tmux
 set -g @spoony-url-key 'u'
+set -g @spoony-url-cycle-key 'U'
 set -g @spoony-path-key 'p'
+set -g @spoony-path-cycle-key 'P'
 set -g @spoony-command-key 'm'
 set -g @spoony-line-key 'x'
 set -g @spoony-open-key 'o'
+```
+
+If `@spoony-url-cycle-key` or `@spoony-path-cycle-key` is unset and the base selector key is a single lowercase letter, Spoony derives the cycle key by uppercasing it.
+
+For example, this moves the default URL and path selectors to uppercase keys and moves their cycle keys to control keys:
+
+```tmux
+set -g @spoony-url-key 'U'
+set -g @spoony-url-cycle-key 'C-u'
+set -g @spoony-path-key 'P'
+set -g @spoony-path-cycle-key 'C-p'
+set -g @spoony-command-key 'M'
+set -g @spoony-line-key 'X'
 ```
 
 Any key can be disabled with `off`:
 
 ```tmux
 set -g @spoony-open-key 'off'
+set -g @spoony-url-cycle-key 'off'
 ```
 
 ## Prompt Matching

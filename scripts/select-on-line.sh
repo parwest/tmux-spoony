@@ -1,31 +1,6 @@
 #!/usr/bin/env bash
 set -u
 
-kind="${1:-}"
-pane_id="${2:-}"
-
-if [ -z "$kind" ] || [ -z "$pane_id" ]; then
-  tmux display-message "spoony: missing selector arguments"
-  exit 0
-fi
-
-cursor_x="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_x}')"
-cursor_y="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_y}')"
-line="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_line}')"
-
-if [ -z "$line" ]; then
-  tmux display-message "spoony: no copy-mode line found"
-  exit 0
-fi
-
-if ! [[ "$cursor_x" =~ ^[0-9]+$ ]]; then
-  cursor_x=0
-fi
-
-if ! [[ "$cursor_y" =~ ^[0-9]+$ ]]; then
-  cursor_y=""
-fi
-
 visible_cursor_line() {
   if [ -z "$cursor_y" ]; then
     return
@@ -36,19 +11,50 @@ visible_cursor_line() {
 }
 
 trim_trailing_punctuation() {
-  token="$1"
-  while [[ "$token" =~ [.,\;\:\)\]\}]+$ ]]; do
-    token="${token%?}"
+  local token="$1"
+  local last opener closer opens closes
+
+  while [ -n "$token" ]; do
+    last="${token: -1}"
+    case "$last" in
+      .|,|";"|:|"!"|"?")
+        token="${token%?}"
+        ;;
+      ")"|"]"|"}")
+        case "$last" in
+          ")") opener="("; closer=")" ;;
+          "]") opener="["; closer="]" ;;
+          "}") opener="{"; closer="}" ;;
+        esac
+
+        opens="${token//[^"$opener"]/}"
+        closes="${token//[^"$closer"]/}"
+        if [ "${#closes}" -gt "${#opens}" ]; then
+          token="${token%?}"
+        else
+          break
+        fi
+        ;;
+      *)
+        break
+        ;;
+    esac
   done
+
   printf '%s' "$token"
 }
 
-find_nearest_match() {
+find_match() {
   regex="$1"
+  mode="${2:-nearest}"
 
   best_start=-1
   best_end=-1
   best_distance=999999
+  first_start=-1
+  first_end=-1
+  cycle_start=-1
+  cycle_end=-1
 
   rest="$line"
   offset=0
@@ -75,25 +81,77 @@ find_nearest_match() {
 
     end=$((start + ${#match} - 1))
 
-    if [ "$cursor_x" -lt "$start" ]; then
-      distance=$((start - cursor_x))
-    elif [ "$cursor_x" -gt "$end" ]; then
-      distance=$((cursor_x - end))
-    else
-      distance=0
+    if [ "$first_start" -lt 0 ]; then
+      first_start="$start"
+      first_end="$end"
     fi
 
-    if [ "$distance" -lt "$best_distance" ]; then
-      best_distance="$distance"
-      best_start="$start"
-      best_end="$end"
+    if [ "$mode" = "cycle" ]; then
+      if [ "$cycle_start" -lt 0 ] && [ "$start" -gt "$cursor_x" ]; then
+        cycle_start="$start"
+        cycle_end="$end"
+      fi
+    else
+      if [ "$cursor_x" -lt "$start" ]; then
+        distance=$((start - cursor_x))
+      elif [ "$cursor_x" -gt "$end" ]; then
+        distance=$((cursor_x - end))
+      else
+        distance=0
+      fi
+
+      if [ "$distance" -lt "$best_distance" ]; then
+        best_distance="$distance"
+        best_start="$start"
+        best_end="$end"
+      fi
     fi
 
     advance=$((start - offset + ${#raw_match}))
     rest="${rest:$advance}"
     offset=$((offset + advance))
   done
+
+  if [ "$mode" = "cycle" ]; then
+    if [ "$cycle_start" -ge 0 ]; then
+      best_start="$cycle_start"
+      best_end="$cycle_end"
+    else
+      best_start="$first_start"
+      best_end="$first_end"
+    fi
+  fi
 }
+
+kind="${1:-}"
+pane_id="${2:-}"
+mode="${3:-nearest}"
+
+if [ -z "$kind" ] || [ -z "$pane_id" ]; then
+  tmux display-message "spoony: missing selector arguments"
+  exit 0
+fi
+
+if [ "$mode" != "cycle" ]; then
+  mode="nearest"
+fi
+
+cursor_x="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_x}')"
+cursor_y="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_y}')"
+line="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_line}')"
+
+if [ -z "$line" ]; then
+  tmux display-message "spoony: no copy-mode line found"
+  exit 0
+fi
+
+if ! [[ "$cursor_x" =~ ^[0-9]+$ ]]; then
+  cursor_x=0
+fi
+
+if ! [[ "$cursor_y" =~ ^[0-9]+$ ]]; then
+  cursor_y=""
+fi
 
 move_cursor() {
   direction="$1"
@@ -126,7 +184,7 @@ select_range() {
 case "$kind" in
   url)
     label="URL"
-    find_nearest_match '(https?|ftp)://[^[:space:]<>"'\'']+'
+    find_match '(https?|ftp)://[^[:space:]<>"'\'']+' "$mode"
     ;;
   path)
     label="path"
@@ -135,7 +193,7 @@ case "$kind" in
       line="$visible_line"
     fi
 
-    find_nearest_match '(~|/|\./|\.\./|[[:alnum:]_.-]+/)[^[:space:]<>"'\'']+'
+    find_match '(~|/|\./|\.\./|[[:alnum:]_.-]+/)[^[:space:]<>"'\'']+' "$mode"
     ;;
   command)
     label="command"
