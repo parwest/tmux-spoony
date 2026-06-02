@@ -123,6 +123,49 @@ find_match() {
   fi
 }
 
+load_joined_url_context() {
+  local regex="$1"
+  local current_line="$line"
+  local old_cursor_x="$cursor_x"
+  local start end joined needle trimmed idx line_len prefix pane_width wrap_adjust
+
+  if [ -z "$cursor_y" ] || [ -z "$current_line" ]; then return; fi
+
+  start=$((cursor_y - 12))
+  if [ "$start" -lt 0 ]; then start=0; fi
+  end=$((cursor_y + 4))
+  trimmed="$(printf '%s' "$current_line" | sed 's/[[:space:]]*$//')"
+  if [ -z "$trimmed" ]; then return; fi
+  pane_width="$(tmux display-message -p -t "$pane_id" '#{pane_width}' 2>/dev/null)"
+
+  while IFS= read -r joined; do
+    [[ "$joined" =~ $regex ]] || continue
+
+    idx=-1
+    for needle in "$current_line" "$trimmed"; do
+      [ -z "$needle" ] && continue
+      if [[ "$joined" == *"$needle"* ]]; then
+        prefix="${joined%%"$needle"*}"
+        idx="${#prefix}"
+        break
+      fi
+    done
+
+    if [ "$idx" -ge 0 ]; then
+      line="$joined"
+      wrap_adjust=0
+      if [[ "$pane_width" =~ ^[0-9]+$ ]] && [ "$pane_width" -gt 0 ] && [ "$idx" -ge "$pane_width" ]; then
+        wrap_adjust=$((idx / pane_width))
+      fi
+      cursor_x=$((idx + old_cursor_x))
+      line_len="${#line}"
+      if [ "$cursor_x" -gt "$line_len" ]; then cursor_x="$line_len"; fi
+      cursor_x=$((cursor_x + wrap_adjust))
+      return
+    fi
+  done < <(tmux capture-pane -p -J -t "$pane_id" -S "$start" -E "$end" 2>/dev/null)
+}
+
 kind="${1:-}"
 pane_id="${2:-}"
 mode="${3:-nearest}"
@@ -184,7 +227,11 @@ select_range() {
 case "$kind" in
   url)
     label="URL"
-    find_match '(https?|ftp)://[^[:space:]<>"'\'']+' "$mode"
+    url_regex='(https?|ftp)://[^[:space:]<>"'\'']+'
+    load_joined_url_context "$url_regex"
+    find_match "$url_regex" "$mode"
+    pane_width="$(tmux display-message -p -t "$pane_id" '#{pane_width}' 2>/dev/null)"
+    if [[ "$pane_width" =~ ^[0-9]+$ ]] && [ "$pane_width" -gt 0 ] && [ "$best_start" -ge 0 ]; then best_end=$((best_end + best_end / pane_width - best_start / pane_width)); fi
     ;;
   path)
     label="path"
