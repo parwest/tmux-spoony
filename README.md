@@ -22,18 +22,46 @@ U  cycle to the next URL on the cursor line
 p  select path on the cursor line
 P  cycle to the next path on the cursor line
 m  select command after the prompt
+M  after pressing the lowercase variant to select command output block until the next prompt
 x  select the whole line
 o  open the selected text
 y  yank the selected text
 ```
 
-Example:
+The command block selector starts at the command after the prompt, then keeps selecting downward until it finds the next prompt. If the command is still running and there is no next prompt, it selects through the last non-empty output row. That means interrupted commands include the `^C` line because it is part of how the command block ended.
+
+Examples:
 
 ```text
 running on http://localhost:3000/practice
+
+  Move to that line, press `u` to select the URL, then press `o` to open it.
 ```
 
-Move to that line, press `u`, then press `o`.
+```text
+docs available at http://localhost:3000/docs and http://localhost:3000/api
+
+  Move to that line, press `u` to select the nearest URL, then press `U` to cycle to the next URL on that same line.
+```
+
+```text
+saved assets/tmuxSpoony.gif and logs/server-output.txt
+
+  Move to that line, press `p` to select the nearest path, then press `P` to cycle to the next path on that same line.
+```
+
+```text
+dev@host [ ~/project/api ] $ npm run start
+> start
+> node server.js
+
+running on http://localhost:3000/practice
+^C
+dev@host [ ~/project/api ] $
+
+  Move to the command line, press `m` to select only `npm run start`, then press `M` to select the command and its output through `^C`, stopping before the next prompt.
+  * works best if you press `m` (lowercase) before `M` (uppercase)
+```
 
 ## Install
 
@@ -99,11 +127,12 @@ set -g @spoony-url-cycle-key 'U'
 set -g @spoony-path-key 'p'
 set -g @spoony-path-cycle-key 'P'
 set -g @spoony-command-key 'm'
+set -g @spoony-command-block-key 'M'
 set -g @spoony-line-key 'x'
 set -g @spoony-open-key 'o'
 ```
 
-If `@spoony-url-cycle-key` or `@spoony-path-cycle-key` is unset and the base selector key is a single lowercase letter, Spoony derives the cycle key by uppercasing it.
+If `@spoony-url-cycle-key`, `@spoony-path-cycle-key`, or `@spoony-command-block-key` is unset and the base selector key is a single lowercase letter, Spoony derives the related key by uppercasing it. For example, `u` derives `U`, `p` derives `P`, and `m` derives `M`.
 
 For example, this moves the default URL and path selectors to uppercase keys and moves their cycle keys to control keys:
 
@@ -113,6 +142,7 @@ set -g @spoony-url-cycle-key 'C-u'
 set -g @spoony-path-key 'P'
 set -g @spoony-path-cycle-key 'C-p'
 set -g @spoony-command-key 'M'
+set -g @spoony-command-block-key 'B'
 set -g @spoony-line-key 'X'
 ```
 
