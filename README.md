@@ -1,29 +1,5 @@
 # tmux-spoony
 
-current problems:
-doesnt work on urls so its completly broken
-
-for local dev:
-rm -rf ~/.tmux/plugins/tmux-spoony
-then
-tmux source-file ~/.tmux.conf
-then
-uncomment run shell in config
-tmux run-shell '/Users/parkerweston/Desktop/tmux-spoony/tmux-spoony.tmux'
-then
-tmux source-file ~/.tmux.conf
-then
-test
-
-u probalably will need to run the below as well
-tmux unbind-key -T copy-mode-vi u
-tmux unbind-key -T copy-mode-vi U
-tmux unbind-key -T copy-mode-vi p
-tmux unbind-key -T copy-mode-vi P
-tmux unbind-key -T copy-mode-vi m
-tmux unbind-key -T copy-mode-vi x
-tmux unbind-key -T copy-mode-vi o
-
 ![tmux-spoony demo](./assets/tmuxSpoony.gif)
 
 Small tmux copy-mode helpers for grabbing useful terminal text without replacing tmux copy mode.
