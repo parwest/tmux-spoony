@@ -191,6 +191,9 @@ case "$kind" in
     visible_line="$(visible_cursor_line)"
     if [ -n "$visible_line" ]; then
       line="$visible_line"
+      if [ "$cursor_x" -gt "${#line}" ]; then
+        cursor_x="${#line}"
+      fi
     fi
 
     find_match '(~|/|\./|\.\./|[[:alnum:]_.-]+/)[^[:space:]<>"'\'']+' "$mode"

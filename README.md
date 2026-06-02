@@ -1,5 +1,29 @@
 # tmux-spoony
 
+current problems:
+doesnt work on urls so its completly broken
+
+for local dev:
+rm -rf ~/.tmux/plugins/tmux-spoony
+then
+tmux source-file ~/.tmux.conf
+then
+uncomment run shell in config
+tmux run-shell '/Users/parkerweston/Desktop/tmux-spoony/tmux-spoony.tmux'
+then
+tmux source-file ~/.tmux.conf
+then
+test
+
+u probalably will need to run the below as well
+tmux unbind-key -T copy-mode-vi u
+tmux unbind-key -T copy-mode-vi U
+tmux unbind-key -T copy-mode-vi p
+tmux unbind-key -T copy-mode-vi P
+tmux unbind-key -T copy-mode-vi m
+tmux unbind-key -T copy-mode-vi x
+tmux unbind-key -T copy-mode-vi o
+
 ![tmux-spoony demo](./assets/tmuxSpoony.gif)
 
 Small tmux copy-mode helpers for grabbing useful terminal text without replacing tmux copy mode.
@@ -17,8 +41,8 @@ prefix [
 Move to a target line with normal tmux copy-mode navigation, then press:
 
 ```text
-u  select URL on the cursor line
-U  cycle to the next URL on the cursor line
+u  select URL near the cursor
+U  cycle to the next URL near the cursor
 p  select path on the cursor line
 P  cycle to the next path on the cursor line
 m  select command after the prompt
@@ -96,6 +120,7 @@ Spoony works without configuration. To customize the copy-mode keys, add options
 ```tmux
 set -g @spoony-url-key 'u'
 set -g @spoony-url-cycle-key 'U'
+set -g @spoony-url-wrap-scan-lines '10'
 set -g @spoony-path-key 'p'
 set -g @spoony-path-cycle-key 'P'
 set -g @spoony-command-key 'm'
@@ -122,6 +147,16 @@ Any key can be disabled with `off`:
 set -g @spoony-open-key 'off'
 set -g @spoony-url-cycle-key 'off'
 ```
+
+## Wrapped URLs
+
+The URL selector can find long URLs that wrap across visual rows. By default, Spoony scans up to 10 rows around the cursor for a URL start such as `https://`, then follows the URL continuation across wrapped rows.
+
+```tmux
+set -g @spoony-url-wrap-scan-lines '10'
+```
+
+Set this to `0` to keep URL matching on the current row only.
 
 ## Prompt Matching
 
