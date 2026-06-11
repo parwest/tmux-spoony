@@ -254,6 +254,17 @@ load_copy_context() {
   if ! is_unsigned_int "$cursor_y"; then
     cursor_y=""
   fi
+
+  if [ -n "$cursor_y" ]; then
+    local visible
+    visible="$(visible_cursor_line "$pane_id" "$cursor_y")"
+    if [ -n "$visible" ]; then
+      line="$visible"
+      if [ "$cursor_x" -gt "${#line}" ]; then
+        cursor_x="${#line}"
+      fi
+    fi
+  fi
 }
 
 select_url() {

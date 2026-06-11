@@ -73,9 +73,14 @@ Add Spoony to your `~/.tmux.conf` plugin list:
 set -g @plugin 'parwest/tmux-spoony'
 ```
 
-Make sure the plugin line appears before TPM is initialized:
+For example, your TPM section should look roughly like this:
 
 ```tmux
+# Plugins
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'parwest/tmux-spoony'
+
+# Keep this at the bottom of the TPM section
 run '~/.tmux/plugins/tpm/tpm'
 ```
 
@@ -89,18 +94,6 @@ Install the plugin with TPM:
 
 ```text
 prefix + I
-```
-
-Or run TPM's installer directly:
-
-```sh
-~/.tmux/plugins/tpm/bin/install_plugins
-```
-
-Reload tmux once more after install:
-
-```sh
-tmux source-file ~/.tmux.conf
 ```
 
 ### Local Checkout
@@ -152,6 +145,23 @@ Any key can be disabled with `off`:
 set -g @spoony-open-key 'off'
 set -g @spoony-url-cycle-key 'off'
 ```
+
+Turning off a base selector key also turns off its derived uppercase variant. For example, this disables both `u` and `U`:
+
+```tmux
+set -g @spoony-url-key 'off'
+```
+
+To keep cycling while the base key is off, set the cycle key explicitly:
+
+```tmux
+set -g @spoony-url-key 'off'
+set -g @spoony-url-cycle-key 'U'
+```
+
+When a key is `off`, Spoony also unbinds that selector's default key, so flipping a default option to `off` and reloading your tmux config takes effect without restarting the tmux server. If you previously used a custom key, unbind that old key manually or restart tmux.
+
+If you move a base selector to an uppercase key that matches the default cycle key (for example `set -g @spoony-url-key 'U'`), the cycle key is disabled instead of overwriting your base binding. Set `@spoony-url-cycle-key` explicitly if you still want cycling.
 
 ## Prompt Matching
 
