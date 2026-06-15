@@ -26,7 +26,10 @@ M  after pressing the lowercase variant to select command output block until the
 x  select the whole line
 o  open the selected text
 y  yank the selected text
+?  show the spoony cheatsheet in a popup
 ```
+
+The `?` popup is generated from your *actual* resolved keys, so it always reflects any remaps, disabled keys, or derived cycle keys. Press any key to close it.
 
 The command block selector starts at the command after the prompt, then keeps selecting downward until it finds the next prompt. If the command is still running and there is no next prompt, it selects through the last non-empty output row. That means interrupted commands include the `^C` line because it is part of how the command block ended.
 
@@ -123,7 +126,10 @@ set -g @spoony-command-key 'm'
 set -g @spoony-command-block-key 'M'
 set -g @spoony-line-key 'x'
 set -g @spoony-open-key 'o'
+set -g @spoony-help-key '?'
 ```
+
+The default `?` overrides copy-mode-vi's `search-backward`. If you rely on `?` for reverse search, remap the cheatsheet (for example `set -g @spoony-help-key 'g'`) or disable it with `set -g @spoony-help-key 'off'`.
 
 If `@spoony-url-cycle-key`, `@spoony-path-cycle-key`, or `@spoony-command-block-key` is unset and the base selector key is a single lowercase letter, Spoony derives the related key by uppercasing it. For example, `u` derives `U`, `p` derives `P`, and `m` derives `M`.
 
@@ -181,7 +187,5 @@ It matches common prompts ending in `$ `, `# `, or `> `, and avoids mistaking li
 
 Development/testing system:
 
-- macOS
 - tmux `3.6a`
-- GNU Bash `5.3.9`
 - `copy-mode-vi`

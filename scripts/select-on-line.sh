@@ -17,6 +17,8 @@ visible_cursor_line() {
     return
   fi
 
+  cursor_row=$((cursor_row - scroll_pos))
+
   tmux capture-pane -p -t "$target_pane" -S "$cursor_row" -E "$cursor_row" 2>/dev/null |
     sed -n '1p'
 }
@@ -150,11 +152,8 @@ load_joined_url_context() {
     return
   fi
 
-  start=$((cursor_y - 12))
-  if [ "$start" -lt 0 ]; then
-    start=0
-  fi
-  end=$((cursor_y + 4))
+  start=$((cursor_y - scroll_pos - 40))
+  end=$((cursor_y - scroll_pos + 40))
 
   trimmed="$(printf '%s' "$current_line" | sed 's/[[:space:]]*$//')"
   if [ -z "$trimmed" ]; then
@@ -241,6 +240,11 @@ load_copy_context() {
   cursor_x="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_x}')"
   cursor_y="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_y}')"
   line="$(tmux display-message -p -t "$pane_id" '#{copy_cursor_line}')"
+  scroll_pos="$(tmux display-message -p -t "$pane_id" '#{scroll_position}')"
+
+  if ! is_unsigned_int "$scroll_pos"; then
+    scroll_pos=0
+  fi
 
   if [ -z "$line" ]; then
     show_message "no copy-mode line found"
@@ -317,7 +321,7 @@ extend_command_selection_to_block() {
       end_row="$row"
     fi
     row_index=$((row_index + 1))
-  done < <(tmux capture-pane -p -t "$pane_id" -S "$cursor_y" 2>/dev/null)
+  done < <(tmux capture-pane -p -t "$pane_id" -S "$((cursor_y - scroll_pos))" 2>/dev/null)
 
   if [ "$block_end" -gt 0 ]; then
     best_end=$((${#end_row} - 1))
@@ -383,7 +387,7 @@ main() {
   local kind="${1:-}"
   local pane_id="${2:-}"
   local mode="${3:-nearest}"
-  local cursor_x cursor_y line label best_start best_end end_lines_down
+  local cursor_x cursor_y line label best_start best_end end_lines_down scroll_pos
 
   if [ -z "$kind" ] || [ -z "$pane_id" ]; then
     show_message "missing selector arguments"

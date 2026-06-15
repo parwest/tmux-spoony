@@ -41,7 +41,7 @@ bind_copy_mode_key() {
 main() {
   local current_dir
   local url_key path_key url_cycle_key path_cycle_key
-  local command_key command_block_key line_key open_key
+  local command_key command_block_key line_key open_key help_key
 
   current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -53,6 +53,7 @@ main() {
   command_block_key="$(tmux show-option -gqv @spoony-command-block-key)"
   line_key="$(tmux show-option -gqv @spoony-line-key)"
   open_key="$(tmux show-option -gqv @spoony-open-key)"
+  help_key="$(tmux show-option -gqv @spoony-help-key)"
 
   if [ -z "$url_key" ]; then
     url_key="u"
@@ -74,6 +75,10 @@ main() {
     open_key="o"
   fi
 
+  if [ -z "$help_key" ]; then
+    help_key="?"
+  fi
+
   url_cycle_key="$(derive_cycle_key "$url_cycle_key" "$url_key" "U")"
   path_cycle_key="$(derive_cycle_key "$path_cycle_key" "$path_key" "P")"
   command_block_key="$(derive_cycle_key "$command_block_key" "$command_key" "M")"
@@ -86,6 +91,18 @@ main() {
   unbind_if_off "$command_block_key" "M"
   unbind_if_off "$line_key" "x"
   unbind_if_off "$open_key" "o"
+  unbind_if_off "$help_key" "?"
+
+  # Publish the resolved keys so the help popup can render them dynamically.
+  tmux set-option -g @spoony-active-url-key "$url_key"
+  tmux set-option -g @spoony-active-url-cycle-key "$url_cycle_key"
+  tmux set-option -g @spoony-active-path-key "$path_key"
+  tmux set-option -g @spoony-active-path-cycle-key "$path_cycle_key"
+  tmux set-option -g @spoony-active-command-key "$command_key"
+  tmux set-option -g @spoony-active-command-block-key "$command_block_key"
+  tmux set-option -g @spoony-active-line-key "$line_key"
+  tmux set-option -g @spoony-active-open-key "$open_key"
+  tmux set-option -g @spoony-active-help-key "$help_key"
 
   bind_copy_mode_key "$url_key" "u" run-shell "bash '$current_dir/scripts/select-on-line.sh' url '#{pane_id}'"
   bind_copy_mode_key "$path_key" "p" run-shell "bash '$current_dir/scripts/select-on-line.sh' path '#{pane_id}'"
@@ -95,6 +112,7 @@ main() {
   bind_copy_mode_key "$command_block_key" "M" run-shell "bash '$current_dir/scripts/select-on-line.sh' command '#{pane_id}' block"
   bind_copy_mode_key "$line_key" "x" send-keys -X select-line
   bind_copy_mode_key "$open_key" "o" send-keys -X copy-pipe-and-cancel "bash '$current_dir/scripts/open-selection.sh' '#{pane_id}'"
+  bind_copy_mode_key "$help_key" "?" display-popup -E -w 58 -h 18 -T " spoony " "bash '$current_dir/scripts/show-help.sh'; read -rsn1"
 }
 
 main "$@"
