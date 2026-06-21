@@ -22,4 +22,4 @@ case "$(uname -s)" in
     ;;
 esac
 
-"$opener" "$selection" >/dev/null 2>&1 &
+"$opener" -- "$selection" >/dev/null 2>&1 &
