@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+current_dir=""
+
 derive_cycle_key() {
   local explicit_key="$1"
   local base_key="$2"
@@ -22,40 +24,36 @@ spoony_copy_mode_tables() {
   printf '%s\n' copy-mode-vi copy-mode
 }
 
-restore_default_binding() {
-  local table="$1"
-  local key="$2"
+encode_key() {
+  local key="$1"
+  local out="" i c
 
-  case "$table:$key" in
-    'copy-mode-vi:?')
-      tmux bind-key -T "$table" "$key" command-prompt -T search -p '(search up)' \
-        "send-keys -X search-backward -- '%%'"
-      ;;
-    'copy-mode-vi:o')
-      tmux bind-key -T "$table" "$key" send-keys -X other-end
-      ;;
-    'copy-mode-vi:P'|'copy-mode:P')
-      tmux bind-key -T "$table" "$key" send-keys -X toggle-position
-      ;;
-    'copy-mode-vi:M')
-      tmux bind-key -T "$table" "$key" send-keys -X middle-line
-      ;;
-    *)
-      tmux unbind-key -T "$table" "$key" 2>/dev/null
-      ;;
-  esac
+  for ((i = 0; i < ${#key}; i++)); do
+    c="${key:$i:1}"
+    if [[ "$c" =~ ^[A-Za-z0-9]$ ]]; then
+      out="$out$c"
+    else
+      out="$out$(printf '_%02x' "'$c")"
+    fi
+  done
+
+  printf '%s' "$out"
+}
+
+saved_option_name() {
+  printf '@spoony-saved-%s-%s' "$1" "$(encode_key "$2")"
 }
 
 binding_is_spoony() {
   local binding="$1"
-  local key="$2"
+  local name="$2"
 
   case "$binding" in
     *'/scripts/select-on-line.sh'*|*'/scripts/open-selection.sh'*|*'/scripts/show-help.sh'*)
       return 0
       ;;
     *'send-keys -X select-line'*)
-      [ "$key" = "x" ]
+      [ "$name" = "line" ]
       return
       ;;
   esac
@@ -63,126 +61,161 @@ binding_is_spoony() {
   return 1
 }
 
-restore_if_off() {
-  local key="$1"
-  local default_key="$2"
-  local previous_key="$3"
-  local table
-  local binding
+# ask a throwaway config-less tmux server what the key's default binding is.
+restore_pristine_default() {
+  local table="$1"
+  local key="$2"
+  local line
+  local defaults_socket="spoony-defaults-$$"
 
-  if [ "$key" = "off" ]; then
-    for table in $(spoony_copy_mode_tables); do
-      binding="$(tmux list-keys -T "$table" "$default_key" 2>/dev/null)"
+  line="$(tmux -L "$defaults_socket" -f /dev/null start-server \; list-keys -T "$table" "$key" 2>/dev/null)"
+  tmux -L "$defaults_socket" kill-server 2>/dev/null
 
-      if binding_is_spoony "$binding" "$default_key" ||
-        { [ -z "$binding" ] && { [ "$previous_key" = "$default_key" ] || [ "$previous_key" = "off" ]; }; }; then
-        restore_default_binding "$table" "$default_key"
-      fi
-    done
+  if [ -n "$line" ]; then
+    printf '%s\n' "$line" | tmux source-file -
+  else
+    tmux unbind-key -T "$table" "$key" 2>/dev/null
   fi
 }
 
-bind_copy_mode_key() {
-  local key="$1"
-  shift 1
+release_key() {
+  local table="$1"
+  local key="$2"
+  local name="$3"
+  local saved_opt saved existing
+
+  saved_opt="$(saved_option_name "$table" "$key")"
+  saved="$(tmux show-option -gqv "$saved_opt")"
+
+  if [ -z "$saved" ]; then
+    existing="$(tmux list-keys -T "$table" "$key" 2>/dev/null)"
+    if [ -n "$existing" ] && binding_is_spoony "$existing" "$name"; then
+      restore_pristine_default "$table" "$key"
+    fi
+    return
+  fi
+
+  tmux set-option -gu "$saved_opt"
+
+  case "$saved" in
+    none)
+      tmux unbind-key -T "$table" "$key" 2>/dev/null
+      ;;
+    default)
+      restore_pristine_default "$table" "$key"
+      ;;
+    *)
+      printf '%s\n' "$saved" | tmux source-file -
+      ;;
+  esac
+}
+
+claim_key() {
+  local table="$1"
+  local key="$2"
+  local name="$3"
+  shift 3
+  local saved_opt existing
+
+  saved_opt="$(saved_option_name "$table" "$key")"
+
+  if [ -z "$(tmux show-option -gqv "$saved_opt")" ]; then
+    existing="$(tmux list-keys -T "$table" "$key" 2>/dev/null)"
+    if [ -z "$existing" ]; then
+      tmux set-option -g "$saved_opt" none
+    elif binding_is_spoony "$existing" "$name"; then
+      tmux set-option -g "$saved_opt" default
+    else
+      tmux set-option -g "$saved_opt" "$existing"
+    fi
+  fi
+
+  tmux bind-key -T "$table" "$key" "$@"
+}
+
+bind_selector() {
+  local name="$1"
+  local key="$2"
   local table
 
-  if [ -n "$key" ] && [ "$key" != "off" ]; then
-    for table in $(spoony_copy_mode_tables); do
-      tmux bind-key -T "$table" "$key" "$@"
-    done
+  if [ -z "$key" ] || [ "$key" = "off" ]; then
+    return
   fi
+
+  for table in $(spoony_copy_mode_tables); do
+    case "$name" in
+      url|path|command|sha)
+        claim_key "$table" "$key" "$name" run-shell "bash '$current_dir/scripts/select-on-line.sh' $name '#{pane_id}'"
+        ;;
+      url-cycle)
+        claim_key "$table" "$key" "$name" run-shell "bash '$current_dir/scripts/select-on-line.sh' url '#{pane_id}' cycle"
+        ;;
+      path-cycle)
+        claim_key "$table" "$key" "$name" run-shell "bash '$current_dir/scripts/select-on-line.sh' path '#{pane_id}' cycle"
+        ;;
+      command-block)
+        claim_key "$table" "$key" "$name" run-shell "bash '$current_dir/scripts/select-on-line.sh' command '#{pane_id}' block"
+        ;;
+      sha-next)
+        claim_key "$table" "$key" "$name" run-shell -b "bash '$current_dir/scripts/select-on-line.sh' sha '#{pane_id}' down"
+        ;;
+      line)
+        claim_key "$table" "$key" "$name" send-keys -X select-line
+        ;;
+      open)
+        claim_key "$table" "$key" "$name" send-keys -X copy-pipe-and-cancel "bash '$current_dir/scripts/open-selection.sh' '#{pane_id}'"
+        ;;
+      help)
+        claim_key "$table" "$key" "$name" display-popup -E -w 70 -h 25 -T " spoony " "bash '$current_dir/scripts/show-help.sh' '#{mode-keys}'; read -rsn1"
+        ;;
+    esac
+  done
 }
 
 main() {
-  local current_dir
-  local url_key path_key url_cycle_key path_cycle_key
-  local command_key command_block_key line_key open_key help_key
-  local sha_key sha_next_key
+  local names defaults keys
+  local i name key prev explicit table
 
   current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  url_key="$(tmux show-option -gqv @spoony-url-key)"
-  path_key="$(tmux show-option -gqv @spoony-path-key)"
-  url_cycle_key="$(tmux show-option -gqv @spoony-url-cycle-key)"
-  path_cycle_key="$(tmux show-option -gqv @spoony-path-cycle-key)"
-  command_key="$(tmux show-option -gqv @spoony-command-key)"
-  command_block_key="$(tmux show-option -gqv @spoony-command-block-key)"
-  line_key="$(tmux show-option -gqv @spoony-line-key)"
-  open_key="$(tmux show-option -gqv @spoony-open-key)"
-  help_key="$(tmux show-option -gqv @spoony-help-key)"
-  sha_key="$(tmux show-option -gqv @spoony-sha-key)"
-  sha_next_key="$(tmux show-option -gqv @spoony-sha-next-key)"
+  names=(url url-cycle path path-cycle command command-block sha sha-next line open help)
+  defaults=(u U p P m M s S x o '?')
+  keys=()
 
-  if [ -z "$url_key" ]; then
-    url_key="u"
-  fi
+  # cycle/block/next keys derive from the base key resolved just before them.
+  for i in "${!names[@]}"; do
+    name="${names[$i]}"
+    explicit="$(tmux show-option -gqv "@spoony-${name}-key")"
 
-  if [ -z "$path_key" ]; then
-    path_key="p"
-  fi
+    case "$name" in
+      url-cycle|path-cycle|command-block|sha-next)
+        key="$(derive_cycle_key "$explicit" "${keys[$((i - 1))]}" "${defaults[$i]}")"
+        ;;
+      *)
+        key="${explicit:-${defaults[$i]}}"
+        ;;
+    esac
 
-  if [ -z "$command_key" ]; then
-    command_key="m"
-  fi
+    keys[$i]="$key"
+  done
 
-  if [ -z "$line_key" ]; then
-    line_key="x"
-  fi
+  # release remapped or disabled keys before claiming, so selectors that
+  # swap keys between runs don't restore over each other.
+  for i in "${!names[@]}"; do
+    prev="$(tmux show-option -gqv "@spoony-active-${names[$i]}-key")"
 
-  if [ -z "$open_key" ]; then
-    open_key="o"
-  fi
+    if [ -n "$prev" ] && [ "$prev" != "off" ] && [ "$prev" != "${keys[$i]}" ]; then
+      for table in $(spoony_copy_mode_tables); do
+        release_key "$table" "$prev" "${names[$i]}"
+      done
+    fi
+  done
 
-  if [ -z "$help_key" ]; then
-    help_key="?"
-  fi
-
-  if [ -z "$sha_key" ]; then
-    sha_key="s"
-  fi
-
-  url_cycle_key="$(derive_cycle_key "$url_cycle_key" "$url_key" "U")"
-  path_cycle_key="$(derive_cycle_key "$path_cycle_key" "$path_key" "P")"
-  command_block_key="$(derive_cycle_key "$command_block_key" "$command_key" "M")"
-  sha_next_key="$(derive_cycle_key "$sha_next_key" "$sha_key" "S")"
-
-  restore_if_off "$url_key" "u" "$(tmux show-option -gqv @spoony-active-url-key)"
-  restore_if_off "$path_key" "p" "$(tmux show-option -gqv @spoony-active-path-key)"
-  restore_if_off "$url_cycle_key" "U" "$(tmux show-option -gqv @spoony-active-url-cycle-key)"
-  restore_if_off "$path_cycle_key" "P" "$(tmux show-option -gqv @spoony-active-path-cycle-key)"
-  restore_if_off "$command_key" "m" "$(tmux show-option -gqv @spoony-active-command-key)"
-  restore_if_off "$command_block_key" "M" "$(tmux show-option -gqv @spoony-active-command-block-key)"
-  restore_if_off "$line_key" "x" "$(tmux show-option -gqv @spoony-active-line-key)"
-  restore_if_off "$open_key" "o" "$(tmux show-option -gqv @spoony-active-open-key)"
-  restore_if_off "$help_key" "?" "$(tmux show-option -gqv @spoony-active-help-key)"
-  restore_if_off "$sha_key" "s" "$(tmux show-option -gqv @spoony-active-sha-key)"
-  restore_if_off "$sha_next_key" "S" "$(tmux show-option -gqv @spoony-active-sha-next-key)"
-
-  # Publish the resolved keys so the help popup can render them dynamically.
-  tmux set-option -g @spoony-active-url-key "$url_key"
-  tmux set-option -g @spoony-active-url-cycle-key "$url_cycle_key"
-  tmux set-option -g @spoony-active-path-key "$path_key"
-  tmux set-option -g @spoony-active-path-cycle-key "$path_cycle_key"
-  tmux set-option -g @spoony-active-command-key "$command_key"
-  tmux set-option -g @spoony-active-command-block-key "$command_block_key"
-  tmux set-option -g @spoony-active-line-key "$line_key"
-  tmux set-option -g @spoony-active-open-key "$open_key"
-  tmux set-option -g @spoony-active-help-key "$help_key"
-  tmux set-option -g @spoony-active-sha-key "$sha_key"
-  tmux set-option -g @spoony-active-sha-next-key "$sha_next_key"
-
-  bind_copy_mode_key "$url_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' url '#{pane_id}'"
-  bind_copy_mode_key "$path_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' path '#{pane_id}'"
-  bind_copy_mode_key "$url_cycle_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' url '#{pane_id}' cycle"
-  bind_copy_mode_key "$path_cycle_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' path '#{pane_id}' cycle"
-  bind_copy_mode_key "$command_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' command '#{pane_id}'"
-  bind_copy_mode_key "$command_block_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' command '#{pane_id}' block"
-  bind_copy_mode_key "$sha_key" run-shell "bash '$current_dir/scripts/select-on-line.sh' sha '#{pane_id}'"
-  bind_copy_mode_key "$sha_next_key" run-shell -b "bash '$current_dir/scripts/select-on-line.sh' sha '#{pane_id}' down"
-  bind_copy_mode_key "$line_key" send-keys -X select-line
-  bind_copy_mode_key "$open_key" send-keys -X copy-pipe-and-cancel "bash '$current_dir/scripts/open-selection.sh' '#{pane_id}'"
-  bind_copy_mode_key "$help_key" display-popup -E -w 70 -h 25 -T " spoony " "bash '$current_dir/scripts/show-help.sh' '#{mode-keys}'; read -rsn1"
+  for i in "${!names[@]}"; do
+    bind_selector "${names[$i]}" "${keys[$i]}"
+    # Publish the resolved keys so the help popup can render them dynamically.
+    tmux set-option -g "@spoony-active-${names[$i]}-key" "${keys[$i]}"
+  done
 }
 
 main "$@"
