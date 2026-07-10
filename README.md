@@ -13,7 +13,6 @@ Spoony adds one-key selectors for URLs, paths, shell commands, git SHAs, and who
 - Bash 3.2+
 - A URL/file opener if you use Spoony's default `o` opener: macOS `open` or Linux `xdg-open` (provided by `xdg-utils` on most distros). [tmux-open](https://github.com/tmux-plugins/tmux-open) is the recommended companion.
 
-
 ## Usage
 
 Enter copy mode:
@@ -217,7 +216,7 @@ set -g @spoony-url-key 'off'
 set -g @spoony-url-cycle-key 'U'
 ```
 
-When a key is `off`, Spoony leaves existing tmux and custom bindings alone. If Spoony already owns that default key, reloading your config restores tmux's built-in binding, or leaves the key unbound when tmux has no default there. If you previously used a custom Spoony key, unbind that old key manually or restart tmux.
+When a key is `off`, Spoony leaves bindings it never claimed alone. When Spoony owns a key and you turn it `off` or move it, reloading your config restores whatever that key was bound to before Spoony claimed it: tmux's built-in binding, your own custom binding, or unbound if there was nothing. Remapping a Spoony key no longer requires manually unbinding the old key.
 
 If you move a base selector to an uppercase key that matches the default cycle key (for example `set -g @spoony-url-key 'U'`), the cycle key is disabled instead of overwriting your base binding. Set `@spoony-url-cycle-key` explicitly if you still want cycling.
 

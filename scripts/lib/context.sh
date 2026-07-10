@@ -50,16 +50,18 @@ load_copy_context() {
 load_joined_url_context() {
   local regex="$1"
   local current_line="$line"
-  local original_cursor_x="$cursor_x"
+  local old_cursor_x="$cursor_x"
   local start end joined needle trimmed idx line_len prefix pane_width wrap_adjust
 
   if [ -z "$cursor_y" ] || [ -z "$current_line" ]; then
     return
   fi
 
-  # capture a 40-line window around the cursor so wrapped urls can be rejoined.
-  start=$((cursor_y - scroll_pos - 40))
-  end=$((cursor_y - scroll_pos + 40))
+  start=$((cursor_y - scroll_pos - 12))
+  if [ "$start" -lt 0 ]; then
+    start=0
+  fi
+  end=$((cursor_y - scroll_pos + 4))
 
   trimmed="$(printf '%s' "$current_line" | sed 's/[[:space:]]*$//')"
   if [ -z "$trimmed" ]; then
@@ -67,7 +69,6 @@ load_joined_url_context() {
   fi
 
   pane_width="$(tmux display-message -p -t "$pane_id" '#{pane_width}' 2>/dev/null)"
-
   while IFS= read -r joined; do
     [[ "$joined" =~ $regex ]] || continue
 
@@ -83,14 +84,11 @@ load_joined_url_context() {
 
     if [ "$idx" -ge 0 ]; then
       line="$joined"
-
-      # add a wrap adjustment when the match crosses soft wraps.
       wrap_adjust=0
       if is_unsigned_int "$pane_width" && [ "$pane_width" -gt 0 ] && [ "$idx" -ge "$pane_width" ]; then
         wrap_adjust=$((idx / pane_width))
       fi
-
-      cursor_x=$((idx + original_cursor_x))
+      cursor_x=$((idx + old_cursor_x))
       line_len="${#line}"
       if [ "$cursor_x" -gt "$line_len" ]; then
         cursor_x="$line_len"
